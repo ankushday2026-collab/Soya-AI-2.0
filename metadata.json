@@ -1,0 +1,8 @@
+{
+  "name": "Bharat AI",
+  "description": "An intelligent, roasting AI assistant with selectable persona modes, multi-language support (English/Hindi), audio synthesis, and image/video/song generation capabilities.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": []
+}
