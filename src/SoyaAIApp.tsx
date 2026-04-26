@@ -146,21 +146,9 @@ type Session = {
     utterance.pitch = 1.15; // slightly higher for female caring voice
     utterance.rate = 1.05;
 
-    let isEnded = false;
-    const safeOnEnd = () => {
-      if (isEnded) return;
-      isEnded = true;
-      if (onEnd) onEnd();
-    };
-
     if (onStart) utterance.onstart = onStart;
-    utterance.onend = safeOnEnd;
-    utterance.onerror = safeOnEnd;
+    if (onEnd) utterance.onend = onEnd;
     
-    // Fallback to guarantee we return to listening state if speech API gets stuck
-    const fallbackTimeMs = Math.max(3000, (speechFriendlyText.length / 10) * 1000) + 2000;
-    setTimeout(safeOnEnd, fallbackTimeMs);
-
     window.speechSynthesis.speak(utterance);
   };
 
@@ -432,15 +420,14 @@ export default function SoyaAIApp() {
   };
 
   // Handle Speech Recognition Setup
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
-        recognition.continuous = true;
+        recognition.continuous = false;
         recognition.interimResults = true;
+        // recognition.lang = 'hi-IN'; // Could auto-detect or let user toggle
         
         recognition.onresult = (event: any) => {
           let finalTranscript = '';
@@ -452,11 +439,6 @@ export default function SoyaAIApp() {
           if (finalTranscript) {
             setInput((prev) => prev + (prev.length > 0 ? ' ' : '') + finalTranscript);
           }
-          
-          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-          silenceTimerRef.current = setTimeout(() => {
-             if (recognitionRef.current) recognitionRef.current.stop();
-          }, 3000);
         };
 
         recognition.onerror = () => setIsListening(false);
@@ -560,12 +542,8 @@ export default function SoyaAIApp() {
 
       // Voice Call Mode handling: Auto-speak and auto-restart listening
       if (activeMode.id === 'voice_call') {
-         setIsAppSpeaking(true);
          speakText(fullResponse, 
-            () => {
-               // Sometimes onstart doesn't fire on all devices, so we also set it outside.
-               setIsAppSpeaking(true);
-            },
+            () => setIsAppSpeaking(true),
             () => {
                setIsAppSpeaking(false);
                try {
@@ -592,10 +570,10 @@ export default function SoyaAIApp() {
   // Watch for end of listening in voice call mode to auto-submit
   useEffect(() => {
     if (!isListening && activeModeId === 'voice_call' && input.trim() && !isLoading) {
-       // Submit quickly once it's stopped, as silence detection is handled by the recognition now.
+       // A longer delay to ensure the user actually finished speaking
        const timer = setTimeout(() => {
           submitMessage(input);
-       }, 50);
+       }, 2000);
        return () => clearTimeout(timer);
     }
   }, [isListening, activeModeId, input, isLoading]);
