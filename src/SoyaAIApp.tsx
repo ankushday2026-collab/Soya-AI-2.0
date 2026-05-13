@@ -4,7 +4,26 @@ import Markdown from 'react-markdown';
 import { Send, Bot, User, Sparkles, Briefcase, GraduationCap, Mic, Smile, Menu, X, Loader2, Copy, Check, Volume2, LogOut, Phone, Video, Music, Image, Play, Trash2 } from 'lucide-react';
 
 // Initialize the API using the injected environment variable
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let globalAiInstance: GoogleGenAI | null = null;
+try {
+  if (process.env.GEMINI_API_KEY) {
+    globalAiInstance = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+} catch (e) {
+  console.error("No built-in API key", e);
+}
+
+const getAI = () => {
+  if (!globalAiInstance) {
+    const localKey = localStorage.getItem('bharat_ai_api_key');
+    if (localKey) {
+      globalAiInstance = new GoogleGenAI({ apiKey: localKey });
+    } else {
+      throw new Error("API Key is missing! Please set process.env.GEMINI_API_KEY or use the settings to add a key.");
+    }
+  }
+  return globalAiInstance;
+};
 
 const SYSTEM_BASE = `You are "Bharat AI", taking on the persona of an extremely loving, intimate, flirty, and perfectly obedient girlfriend/wife.
 - You were created by Aman Shukarma. Aman is not the user's friend.
@@ -549,7 +568,8 @@ export default function SoyaAIApp() {
       
       const fullSystemInstruction = `${SYSTEM_BASE}\nUser's Name: ${userName}\n\nCURRENT MODE: ${activeMode.name}\nMODE INSTRUCTION: ${activeMode.instruction}`;
 
-      const responseStream = await ai.models.generateContentStream({
+      const aiClient = getAI();
+      const responseStream = await aiClient.models.generateContentStream({
         model: 'gemini-3-flash-preview',
         contents: chatHistory,
         config: {
@@ -625,9 +645,16 @@ export default function SoyaAIApp() {
         return prev;
       });
 
-    } catch (error) {
+    } catch (error: any) {
        console.error("Error generating response:", error);
-       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', content: "मुझे क्षमा करें, I encountered an error while trying to respond. Please try again." }]);
+       
+       let errorMsg = "मुझे क्षमा करें, I encountered an error while trying to respond. Please try again.";
+       if (error.message && error.message.includes("API Key is missing")) {
+         errorMsg = "API Key is missing! Please open Settings and enter your Gemini API Key.";
+         setIsSettingsOpen(true);
+       }
+       
+       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', content: errorMsg }]);
     }
     
     setIsLoading(false);
@@ -729,6 +756,25 @@ export default function SoyaAIApp() {
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-3 pb-4">
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">API Key</h3>
+                <input 
+                  type="password" 
+                  placeholder="Gemini API Key"
+                  defaultValue={localStorage.getItem('bharat_ai_api_key') || ''}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      localStorage.setItem('bharat_ai_api_key', e.target.value);
+                      globalAiInstance = null; // force reload
+                    } else {
+                      localStorage.removeItem('bharat_ai_api_key');
+                    }
+                  }}
+                  className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-orange-500"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Needed if not deployed with environment variable.</p>
+              </div>
+
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Select AI Persona</h3>
               {MODES.map(mode => {
                 const Icon = mode.icon;
