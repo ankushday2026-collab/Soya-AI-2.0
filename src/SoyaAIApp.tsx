@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from '@google/genai';
 import Markdown from 'react-markdown';
@@ -16,7 +17,10 @@ try {
 const getAI = () => {
   if (!globalAiInstance) {
     const localKey = localStorage.getItem('bharat_ai_api_key');
-    const key = import.meta.env.VITE_GEMINI_API_KEY || localKey || 'dummy-key-to-trigger-api-error-gracefully';
+    const key = import.meta.env.VITE_GEMINI_API_KEY || localKey;
+    if (!key || key.trim() === '') {
+       throw new Error("API Key is missing or invalid");
+    }
     globalAiInstance = new GoogleGenAI({ apiKey: key });
   }
   return globalAiInstance;
@@ -497,7 +501,7 @@ export default function SoyaAIApp() {
   // Handle Speech Recognition Setup
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
         recognition.continuous = false; // Set to false to force quicker final results on pause
@@ -695,10 +699,9 @@ export default function SoyaAIApp() {
        console.error("Error generating response:", error);
        
        let errorMsg = "मुझे क्षमा करें, I encountered an error while trying to respond. Please try again.";
-       if (error.message && error.message.includes("API Key is missing")) {
-         errorMsg = "Please tell my creator to add the API key so I can talk to you! 🥺";
-       } else if (error.message && error.message.includes("API_KEY_INVALID")) {
-         errorMsg = "API key invalid hai ya set nahi hai. Please set Gemini API Key! 🥺";
+       if (error.message && (error.message.includes("API Key is missing") || error.message.includes("API_KEY_INVALID"))) {
+         errorMsg = "API key set nahi hai ya invalid hai. Please open Settings and enter your Gemini API Key! 🥺";
+         setIsSettingsOpen(true);
        }
        
        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', content: errorMsg }]);
