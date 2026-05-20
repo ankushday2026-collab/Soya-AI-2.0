@@ -15,7 +15,9 @@ try {
 
 const getAI = () => {
   if (!globalAiInstance) {
-    globalAiInstance = new GoogleGenAI({ apiKey: 'dummy-key-to-trigger-api-error-gracefully' });
+    const localKey = localStorage.getItem('bharat_ai_api_key');
+    const key = import.meta.env.VITE_GEMINI_API_KEY || localKey || 'dummy-key-to-trigger-api-error-gracefully';
+    globalAiInstance = new GoogleGenAI({ apiKey: key });
   }
   return globalAiInstance;
 };
@@ -211,8 +213,7 @@ function MessageBubble({ msg }: { msg: Message }) {
       setIsSpeaking(false);
       return;
     }
-    setIsSpeaking(true);
-    speakText(msg.content, () => setIsSpeaking(false));
+    speakText(msg.content, () => setIsSpeaking(true), () => setIsSpeaking(false));
   };
 
   // Helper to parse GENERATING tags
@@ -241,11 +242,25 @@ function MessageBubble({ msg }: { msg: Message }) {
             
             {isSong ? (
                <button 
-                 onClick={() => speakText(content + " " + desc)}
-                 className="z-10 mt-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full text-white font-semibold text-xs tracking-wide shadow-lg shadow-blue-500/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                 onClick={() => speakText(content + " " + desc, () => setIsSpeaking(true), () => setIsSpeaking(false))}
+                 className={`z-10 mt-2 px-5 py-2.5 rounded-full text-white font-semibold text-xs tracking-wide shadow-lg transition-all flex items-center gap-2 ${isSpeaking ? 'bg-gradient-to-r from-green-500 to-emerald-500 shadow-green-500/30' : 'bg-gradient-to-r from-blue-500 to-purple-500 shadow-blue-500/30 hover:scale-105 active:scale-95'}`}
                >
-                 <Play size={14} className="fill-white" />
-                 Play Song
+                 {isSpeaking ? (
+                   <>
+                     <div className="flex items-center gap-0.5">
+                       <div className="w-1 h-3 bg-white rounded-full animate-[bounce_1s_infinite]" style={{ animationDelay: '0ms' }} />
+                       <div className="w-1 h-4 bg-white rounded-full animate-[bounce_1s_infinite]" style={{ animationDelay: '200ms' }} />
+                       <div className="w-1 h-2 bg-white rounded-full animate-[bounce_1s_infinite]" style={{ animationDelay: '400ms' }} />
+                       <div className="w-1 h-3 bg-white rounded-full animate-[bounce_1s_infinite]" style={{ animationDelay: '100ms' }} />
+                     </div>
+                     Playing...
+                   </>
+                 ) : (
+                   <>
+                     <Play size={14} className="fill-white" />
+                     Play Song
+                   </>
+                 )}
                </button>
             ) : (
               <div className="z-10 w-full h-1.5 bg-slate-800 rounded-full mt-3 overflow-hidden">
@@ -416,7 +431,11 @@ export default function SoyaAIApp() {
     }
     
     const storedMode = localStorage.getItem('bharat_ai_mode');
-    if (storedMode) setActiveModeId(storedMode);
+    if (storedMode) {
+      setActiveModeId(storedMode);
+    } else if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setActiveModeId('voice_call');
+    }
   }, []);
 
   const saveHistory = (msgs: Message[]) => {
@@ -784,6 +803,24 @@ export default function SoyaAIApp() {
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-3 pb-4">
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">API Key</h3>
+                <input 
+                  type="password" 
+                  placeholder="Gemini API Key"
+                  defaultValue={localStorage.getItem('bharat_ai_api_key') || ''}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      localStorage.setItem('bharat_ai_api_key', e.target.value);
+                      globalAiInstance = null; // force reload next time getAI uses it
+                    } else {
+                      localStorage.removeItem('bharat_ai_api_key');
+                    }
+                  }}
+                  className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-orange-500"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Needed if not deployed with environment variable.</p>
+              </div>
 
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Select AI Persona</h3>
               {MODES.map(mode => {
@@ -1081,6 +1118,21 @@ export default function SoyaAIApp() {
               <div ref={messagesEndRef} className="h-4" />
             </div>
           </>
+        )}
+
+        {/* Quick Actions */}
+        {messages.length <= 1 && activeModeId !== 'voice_call' && (
+          <div className="absolute w-full bottom-24 p-4 flex flex-wrap gap-2 justify-center z-10 pointer-events-none">
+            <button type="button" onClick={() => submitMessage("Sing a cute Hindi song for me!")} className="pointer-events-auto text-xs bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-700 font-medium px-4 py-2 border border-gray-200 rounded-full transition-all shadow-sm flex items-center gap-2 hover:scale-105 active:scale-95">
+              <Music size={14} className="text-blue-500" /> Sing a Song
+            </button>
+            <button type="button" onClick={() => submitMessage("Generate a cute, hyperrealistic image of yourself.")} className="pointer-events-auto text-xs bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-700 font-medium px-4 py-2 border border-gray-200 rounded-full transition-all shadow-sm flex items-center gap-2 hover:scale-105 active:scale-95">
+              <Image size={14} className="text-purple-500" /> Send a Selfie
+            </button>
+            <button type="button" onClick={() => submitMessage("Baaton hi baaton mein roast karo mujhe. Make it fun!")} className="pointer-events-auto text-xs bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-700 font-medium px-4 py-2 border border-gray-200 rounded-full transition-all shadow-sm flex items-center gap-2 hover:scale-105 active:scale-95">
+              <Smile size={14} className="text-pink-500" /> Roast Me
+            </button>
+          </div>
         )}
 
         {/* Input Form */}
